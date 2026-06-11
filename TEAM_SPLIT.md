@@ -2,6 +2,7 @@
 
 > **Main idea**: Split by feature domain — each developer owns Backend + Frontend for her features.
 > Both can start on Day 1 and work until the end without stopping.
+> **Absolute source of truth**: `PLAN.md` defines the project architecture. This file only explains the team split and must never contradict `PLAN.md`.
 
 ---
 
@@ -39,7 +40,8 @@ routes/ + controllers/
 ```
 core/
   ├── guards/auth.guard.ts + admin.guard.ts
-  ├── interceptors/jwt.interceptor.ts
+  ├── interceptors/app.interceptor.ts        <- JWT injection + global error handling + ngx-toastr
+  ├── models/api.models.ts                   <- shared API contracts aligned with PLAN.md
   └── services/auth.service.ts + user.service.ts
 
 store/auth/
@@ -57,8 +59,9 @@ shared/navbar/navbar.component.ts           <- show links based on user role
 ```
 
 ### What Developer A gives to Developer B:
-> A file `api-contracts.ts` (see below) with TypeScript types for all API responses.
+> The file `src/app/core/models/api.models.ts` (see below) with TypeScript types for all API responses.
 > Developer B uses these types and does not need to wait for the real server.
+> Developer A also owns `user.service.ts` and the User Management API integration used inside the Admin screen.
 
 ---
 
@@ -74,7 +77,7 @@ routes/ + controllers/
   ├── product.routes.js + product.controller.js    <- CRUD + search
   └── log.routes.js + log.controller.js            <- basket, history
 
-scripts/seed.js        <- import 546 products from CSV
+scripts/seed.js        <- import 546 products from backend/data/products.csv
 data/products.csv
 
 services/
@@ -104,14 +107,14 @@ features/
   ├── history/history.component.ts        <- table + ng2-charts
   ├── my-products/
   │   └── product-form/product-form.component.ts   <- add or edit by ID
-  └── admin/admin.component.ts            <- manage products + users
+  └── admin/admin.component.ts            <- admin layout + product management; user management integration uses Developer A contracts
 
 shared/product-search/product-search.component.ts  <- autocomplete + debounce
 ```
 
 ---
 
-## API Contract (api-contracts.ts) — Agreed on Day 1, Never Changes
+## API Contract (`src/app/core/models/api.models.ts`) — Agreed on Day 1, Aligned With PLAN.md
 
 > Both developers agree on this file before writing any code.
 
@@ -140,9 +143,14 @@ export interface Product {
   _id: string;
   name: string;
   caloriesPer100g: number;
-  servingSizes: Record<string, number>;
+  servingSizes: ServingSize[];
   imageUrl?: string;
   createdBy: string | null;
+}
+
+export interface ServingSize {
+  unit: string;
+  weightInGrams: number;
 }
 
 export interface LogItem {
@@ -172,12 +180,12 @@ export interface DailyLog {
 | Day | Developer A | Developer B |
 |-----|-------------|-------------|
 | 1 | Backend setup + User model + Auth middleware | Angular setup + NgRx + RTL + routing |
-| 2 | Auth routes (register/login) + `api-contracts.ts` | Product model + product routes + seed.js |
+| 2 | Auth routes (register/login) + `api.models.ts` | Product model + product routes + seed.js |
 | 3 | User routes + multer upload | Log model + log routes + basket logic |
 | 4 | Login/Register components (Reactive Forms) | Dashboard + ProductSearch + ProgressBar |
-| 5 | Profile component + Auth guards + JWT interceptor | History + ng2-charts + My Products |
-| 6 | Navbar + NgRx auth store | Admin component + email service + cron job |
-| 7 | Test Auth flow + integration | Test Products/Logs flow + integration |
+| 5 | Profile component + Auth guards + AppInterceptor | History + ng2-charts + My Products |
+| 6 | Navbar + NgRx auth store + User Management API contracts | Admin layout + product management + email service + cron job |
+| 7 | Test Auth/User flow + provide user integration to Admin | Test Products/Logs flow + integrate Admin user management |
 | 8 | Final merge + integration + README | Final merge + integration + README |
 
 ---
@@ -185,14 +193,13 @@ export interface DailyLog {
 ## The Golden Rule
 
 **Developer B does not wait for the Auth API.**
-She writes `AuthService` with a mock that returns a fake token in dev mode, and replaces it with the real API on Day 7.
+Developer A strictly owns `src/app/core/services/auth.service.ts` and `store/auth/`.
+Developer B may use a temporary localStorage/mock token helper inside her own feature branch during independent development, without editing Developer A's core service file.
 
 ```typescript
-// during development — Developer B is fully independent
-export class AuthService {
-  getToken(): string {
-    return localStorage.getItem('token') ?? 'mock-token-for-dev';
-  }
+// during development in Developer B feature code only
+export function getDevToken(): string {
+  return localStorage.getItem('token') ?? 'mock-token-for-dev';
 }
 ```
 

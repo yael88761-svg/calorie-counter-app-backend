@@ -24,7 +24,7 @@ todos:
     content: יצירת services/email.service.js + services/chart.service.js (PNG) + jobs/weekly-email.job.js (node-cron Sunday)
     status: pending
   - id: angular-setup
-    content: יצירת פרויקט Angular ב-frontend/ עם Angular Material, הגדרת routing, guards, JWT interceptor
+    content: יצירת פרויקט Angular ב-frontend/ עם Angular Material, הגדרת routing, guards, app.interceptor.ts
     status: pending
   - id: angular-auth
     content: דפי Login + Register + AuthService
@@ -50,6 +50,73 @@ isProject: false
 # תוכנית: Calorie Counter Full Stack App
 
 > **מסונכרן עם דרישות המורה (PDF)**
+> **מקור אמת יחיד ומוחלט**: כל קובץ תכנון, חלוקת עבודה או מימוש חייב להתיישר לפי `PLAN.md`. במקרה של אי־התאמה, `PLAN.md` קובע.
+
+## החלטות ארכיטקטורה מחייבות
+
+- `Product.servingSizes` הוא תמיד מערך אובייקטים במבנה `{ unit: string, weightInGrams: number }` בכל שכבות המערכת: Mongoose schema, seed script, API responses, Angular models, UnitSelector וחישובי קלוריות.
+- ה־HTTP interceptor היחיד הוא `src/app/core/interceptors/app.interceptor.ts`. הוא אחראי גם להזרקת JWT לכל request וגם לטיפול גלובלי בשגיאות עם `ngx-toastr`, לפי קטע הקוד המלא בהמשך המסמך.
+- Developer A היא הבעלים הבלעדי של `src/app/core/services/auth.service.ts` ושל NgRx Auth Store. Developer B לא משנה את הקבצים האלה; בזמן פיתוח עצמאי היא משתמשת ב־localStorage/mock token helper בתוך branch הפיצ'ר שלה בלבד.
+- Developer B בונה את השלד הראשי של `admin.component.ts` ואת לוגיקת ניהול המוצרים. Developer A מספקת את חוזי ה־API והאינטגרציה של ניהול המשתמשים, והחיבור הסופי נעשה לפי חוזים אלה.
+- קובץ המוצרים ל־seed נמצא תמיד ב־`backend/data/products.csv`.
+- העלאת תמונת פרופיל מתבצעת תמיד דרך `PUT /api/users/profile/image`.
+
+## חוזי API מחייבים
+
+**קובץ**: `frontend/calorie-frontend/src/app/core/models/api.models.ts`
+
+```ts
+export interface User {
+  _id: string;
+  name: string;
+  email: string;
+  role: 'user' | 'admin';
+  calorieGoal: number;
+  age?: number;
+  gender?: string;
+  weight?: number;
+  height?: number;
+  profileImage?: string;
+}
+
+export interface AuthResponse {
+  token: string;
+  user: User;
+}
+
+export interface ServingSize {
+  unit: string;
+  weightInGrams: number;
+}
+
+export interface Product {
+  _id: string;
+  name: string;
+  caloriesPer100g: number;
+  servingSizes: ServingSize[];
+  imageUrl?: string;
+  createdBy: string | null;
+}
+
+export interface LogItem {
+  _id: string;
+  productId: string;
+  productName: string;
+  unit: string;
+  quantity: number;
+  calories: number;
+}
+
+export interface DailyLog {
+  _id: string;
+  userId: string;
+  date: string;
+  targetCalories: number;
+  totalCaloriesConsumed: number;
+  goalMet: boolean;
+  items: LogItem[];
+}
+```
 
 ## מבנה הפרויקט הסופי
 
@@ -79,7 +146,8 @@ calorie-counter/                      ← תיקייה ראשית
 │   ├── middleware/
 │   │   ├── auth.middleware.js     ← JWT verify
 │   │   ├── admin.middleware.js    ← role check
-│   │   └── logger.middleware.js  ← custom factory middleware (חובה!)
+│   │   ├── logger.middleware.js   ← custom factory middleware (חובה!)
+│   │   └── upload.middleware.js   ← multer profile image upload
 │   ├── uploads/                  ← תמונות פרופיל (multer)
 │   ├── services/
 │   │   ├── email.service.js      ← Nodemailer
@@ -117,10 +185,15 @@ calorie-counter/                      ← תיקייה ראשית
 ### [`models/Product.js`](models/Product.js)
 ```js
 { name, caloriesPer100g,
-  servingSizes: { type: Map, of: Number },
+  // מבנה מחייב בכל המערכת: מערך אובייקטים — נוח ל-*ngFor באנגולר וחישוב פשוט בשרת
+  servingSizes: [{
+    unit: { type: String, required: true },        // 'cup', 'slice', 'tablespoon', 'grams'
+    weightInGrams: { type: Number, required: true } // משקל היחידה בגרמים
+  }],
   imageUrl: String,
   createdBy: ObjectId|null }  // null = global
 // static findGlobalAndUserProducts(userId, search): מחזיר גלובליים + של המשתמש
+// חישוב קלוריות לפריט: quantity × weightInGrams × caloriesPer100g / 100
 ```
 
 ### [`models/DailyLog.js`](models/DailyLog.js)
@@ -157,7 +230,7 @@ calorie-counter/                      ← תיקייה ראשית
 ### Users (`/api/users`)
 - `GET /profile` — own profile
 - `PUT /profile` — edit name, calorieGoal, age, gender, etc.
-- `PUT /profile/image` — **multer** upload תמונת פרופיל
+- `PUT /profile/image` — **multer** upload תמונת פרופיל. הנתיב המלא: `PUT /api/users/profile/image`
 - `GET /` *(admin)* — list all users
 - `DELETE /:id` *(admin)*
 - `PUT /:id/role` *(admin)* — change role
@@ -180,7 +253,7 @@ calorie-counter/                      ← תיקייה ראשית
 
 ### File Upload ([`middleware/upload.middleware.js`](middleware/upload.middleware.js)) — **multer - חובה לפי PDF**
 - multer מגדיר `storage` לתיקיית `uploads/`
-- לשימוש בנתיב `PUT /api/users/profile` (העלאת תמונת פרופיל)
+- לשימוש בנתיב `PUT /api/users/profile/image` (העלאת תמונת פרופיל)
 
 ### Email Service ([`services/email.service.js`](services/email.service.js))
 - Nodemailer + Gmail SMTP (נתונים ב-.env)
@@ -201,10 +274,10 @@ calorie-counter/                      ← תיקייה ראשית
 ## שלב 4 – Backend: Seed Script
 
 ### [`scripts/seed.js`](scripts/seed.js)
-- קורא `backend/products.csv`
+- קורא `backend/data/products.csv`
 - ממפה עמודות CSV לסכמת Product:
   - `calories per 100 grams` → `caloriesPer100g`
-  - teaspoon/tablespoon/cup/slice/single → `servingSizes Map`
+  - teaspoon/tablespoon/cup/slice/single → `servingSizes` (מערך אובייקטים: `{ unit, weightInGrams }`)
   - `url` → `imageUrl`
   - `createdBy: null` (global products)
 - מוסיף npm script: `"seed": "node scripts/seed.js"`
@@ -230,7 +303,9 @@ src/app/
 │   │   ├── auth.guard.ts
 │   │   └── admin.guard.ts
 │   ├── interceptors/
-│   │   └── jwt.interceptor.ts      ← מוסיף Authorization header לכל בקשה
+│   │   └── app.interceptor.ts      ← מוסיף Authorization header + תופס שגיאות שרת
+│   ├── models/
+│   │   └── api.models.ts           ← חוזי API משותפים לכל הפיצ'רים
 │   └── services/
 │       ├── auth.service.ts
 │       └── product.service.ts, log.service.ts, user.service.ts
@@ -252,7 +327,11 @@ src/app/
 │   └── profile/profile.component.ts
 └── shared/
     ├── product-search/product-search.component.ts   ← autocomplete + debounce
-    └── navbar/navbar.component.ts                   ← תפריט לפי role
+    ├── navbar/navbar.component.ts                   ← תפריט לפי role
+    ├── pipes/
+    │   └── calorie-format.pipe.ts                   ← Custom Pipe (חובה לפי PDF)
+    └── directives/
+        └── calorie-warning.directive.ts             ← Custom Directive (חובה לפי PDF)
 ```
 
 ### דפים ונתיבים
@@ -277,12 +356,112 @@ src/app/
 - **NavbarComponent** — מציג קישורים שונים לפי role (admin/user/guest)
 - **HttpClient** (Angular built-in) — במקום axios
 - **ספרייה נוספת**: `ngx-toastr` להתראות (success/error notifications)
+- **Custom Pipe** — `CalorieFormatPipe` (חובה לפי PDF) — ראה פירוט בהמשך
+- **Custom Directive** — `CalorieWarningDirective` (חובה לפי PDF) — ראה פירוט בהמשך
 
 ### רכיבים מרכזיים
 - **ProgressBar**: ירוק < 100%, כתום 100-120%, אדום > 120% מהיעד
 - **ProductSearch**: `mat-autocomplete` + `debounceTime(300)` + RxJS
-- **UnitSelector**: מציג רק יחידות קיימות ב-`servingSizes` של המוצר
+- **UnitSelector**: `*ngFor` על מערך `servingSizes` — מציג כל `unit` הקיים למוצר
 - **WeeklyChart**: `ng2-charts` / Chart.js לדף ההיסטוריה
+
+---
+
+### Custom Pipe — `CalorieFormatPipe` — **חובה לפי PDF**
+
+**קובץ**: `src/app/shared/pipes/calorie-format.pipe.ts`
+
+**מה הוא עושה**: מקבל מספר קלוריות ומחזיר מחרוזת מעוצבת עם פסיק-אלפים ותווית עברית.
+
+```ts
+// קלט: 1500  → פלט: "1,500 קק״ל"
+// קלט: 320   → פלט: "320 קק״ל"
+@Pipe({ name: 'calorieFormat', standalone: true })
+export class CalorieFormatPipe implements PipeTransform {
+  transform(value: number): string {
+    if (value == null) return '—';
+    return value.toLocaleString('he-IL') + ' קק״ל';
+  }
+}
+```
+
+**איפה משתמשים בו**:
+- `BasketComponent` — ליד כל פריט ב-basket: `{{ item.calories | calorieFormat }}`
+- `ProgressBarComponent` — `{{ totalCalories | calorieFormat }} מתוך {{ goal | calorieFormat }}`
+- `HistoryComponent` — בטבלת ה-logs היומיים
+
+---
+
+### Custom Directive — `CalorieWarningDirective` — **חובה לפי PDF**
+
+**קובץ**: `src/app/shared/directives/calorie-warning.directive.ts`
+
+**מה היא עושה**: מניפולציה על ה-DOM באמצעות `ElementRef` + `Renderer2` — מחייבת אינפוט של אחוז הקלוריות הנוכחי, ומשנה צבע רקע ומוסיפה אנימציית pulse כשהמשתמש עובר את היעד.
+
+```ts
+@Directive({ selector: '[appCalorieWarning]', standalone: true })
+export class CalorieWarningDirective implements OnChanges {
+  @Input() appCalorieWarning!: number; // אחוז מהיעד (0–100+)
+
+  constructor(private el: ElementRef, private renderer: Renderer2) {}
+
+  ngOnChanges(): void {
+    const pct = this.appCalorieWarning;
+    // איפוס classes קודמים
+    this.renderer.removeClass(this.el.nativeElement, 'warning-orange');
+    this.renderer.removeClass(this.el.nativeElement, 'warning-red');
+
+    if (pct > 120) {
+      this.renderer.addClass(this.el.nativeElement, 'warning-red');   // > 120% — אדום + pulse
+    } else if (pct > 100) {
+      this.renderer.addClass(this.el.nativeElement, 'warning-orange'); // 100-120% — כתום
+    }
+  }
+}
+```
+
+**איפה משתמשים בה**:
+- `ProgressBarComponent`: `<div [appCalorieWarning]="percentConsumed">...</div>`
+- `BasketComponent`: על כרטיסיית הסיכום היומי
+
+---
+
+### HTTP Interceptor — `AppInterceptor` — JWT + Error Handling
+
+**קובץ**: `src/app/core/interceptors/app.interceptor.ts`
+
+**שני תפקידים בinterceptor אחד**:
+
+```ts
+// 1. מזריק את ה-JWT Token לכל בקשה
+// 2. תופס שגיאות שרת ומציג toast מתאים
+export const appInterceptor: HttpInterceptorFn = (req, next) => {
+  const token = inject(AuthService).getToken();
+  const toastr = inject(ToastrService);
+
+  const authReq = token
+    ? req.clone({ setHeaders: { Authorization: `Bearer ${token}` } })
+    : req;
+
+  return next(authReq).pipe(
+    catchError((error: HttpErrorResponse) => {
+      if (error.status === 401) {
+        toastr.error('פג תוקף ההתחברות, אנא התחבר מחדש');
+        inject(AuthService).logout();
+      } else if (error.status === 403) {
+        toastr.error('אין לך הרשאה לבצע פעולה זו');
+      } else if (error.status >= 500) {
+        toastr.error('שגיאת שרת, אנא נסה מחדש מאוחר יותר');
+      } else {
+        toastr.error(error.error?.message || 'אירעה שגיאה');
+      }
+      return throwError(() => error);
+    })
+  );
+};
+```
+
+**רישום ב-`app.config.ts`**: `provideHttpClient(withInterceptors([appInterceptor]))`
 
 ---
 
@@ -352,31 +531,6 @@ API_URL=http://localhost:3000/api
 - מדיה — תמונות מוצרים (imageUrl) + תמונת פרופיל (multer upload)
 - ספרייה נוספת frontend — ngx-toastr
 - ספרייה נוספת backend — csv-parser
-
----
-
-## סדר ביצוע (לפי סוכנים)
-
-### Backend (סוכן 1)
-1. `config/db.js` + `index.js` + `.env` + התקנת חבילות
-2. Models: `User.js` (pre+toJSON), `Product.js` (static), `DailyLog.js` (toJSON)
-3. `middleware/logger.middleware.js` (factory) + `middleware/auth.middleware.js` + `middleware/admin.middleware.js` + `middleware/upload.middleware.js` (multer)
-4. Auth routes: register + login + `express-validator`
-5. Product routes: CRUD + fuzzy search + `scripts/seed.js`
-6. Log routes: basket (add/remove) + history
-7. User routes: profile + image upload + admin panel
-8. Services: email + chart (PNG) + cron job
-9. `README.md` לbackend
-
-### Frontend (סוכן 2)
-10. `ng new` + Angular Material + NgRx + ngx-toastr + הגדרת RTL
-11. Core: guards, JWT interceptor, services
-12. NgRx store: auth slice + logs slice
-13. Shared: NavbarComponent + ProductSearchComponent
-14. Auth pages: Login + Register (Reactive Forms + Validators)
-15. Dashboard: basket + progress bar + URL params לחיפוש
-16. History page: טבלה + ng2-charts
-17. My Products: ProductFormComponent (add/edit לפי ID)
-18. Profile page: עריכה + העלאת תמונה
-19. Admin page: ניהול מוצרים + משתמשים
-20. Responsive CSS + RTL fixes + `README.md` לfrontend
+- **Custom Pipe** — `CalorieFormatPipe` (`shared/pipes/calorie-format.pipe.ts`)
+- **Custom Directive** — `CalorieWarningDirective` (`shared/directives/calorie-warning.directive.ts`)
+- **HTTP Interceptor** — `AppInterceptor` (JWT injection + Error handling עם toastr)
