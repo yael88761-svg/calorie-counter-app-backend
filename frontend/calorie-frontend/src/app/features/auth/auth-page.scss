@@ -23,6 +23,13 @@
   text-align: center;
 }
 
+.auth-brand-icon {
+  display: block;
+  width: 5.5rem;
+  height: auto;
+  margin: 0 auto var(--space-3);
+}
+
 .auth-card mat-card-title {
   font-size: 1.5rem;
   font-weight: 500;
