@@ -4,7 +4,6 @@ const logItemSchema = new mongoose.Schema({
   productId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Product',
-    required: true,
   },
   productName: {
     type: String,
@@ -13,12 +12,10 @@ const logItemSchema = new mongoose.Schema({
   },
   unit: {
     type: String,
-    required: true,
     trim: true,
   },
   quantity: {
     type: Number,
-    required: true,
     min: 0,
   },
   calories: {

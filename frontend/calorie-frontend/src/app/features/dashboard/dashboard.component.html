@@ -65,6 +65,8 @@
     </section>
 
     <aside class="side-panel">
+      <app-quick-calories />
+
       @if (todayLog$ | async; as log) {
         <mat-card appearance="outlined" class="progress-card">
           <mat-card-header>

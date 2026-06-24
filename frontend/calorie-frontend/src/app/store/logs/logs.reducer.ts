@@ -20,7 +20,7 @@ export const logsFeature = createFeature({
   reducer: createReducer(
     initialLogsState,
 
-    on(LogsActions.loadToday, LogsActions.addItem, LogsActions.removeItem, (state) => ({
+    on(LogsActions.loadToday, LogsActions.addItem, LogsActions.addManual, LogsActions.removeItem, (state) => ({
       ...state,
       loading: true,
       error: null,

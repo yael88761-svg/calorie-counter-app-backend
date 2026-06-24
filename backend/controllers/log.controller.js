@@ -72,7 +72,13 @@ async function getHistory(req, res, next) {
 
 async function addToBasket(req, res, next) {
   try {
-    const { productId, unit, quantity } = req.body;
+    const { productId } = req.body;
+
+    if (!productId) {
+      return addManualCalories(req, res, next);
+    }
+
+    const { unit, quantity } = req.body;
     const date = getTodayDateString();
 
     const log = await getOrCreateLogForDate(req.user.id, date);
@@ -126,6 +132,38 @@ async function addToBasket(req, res, next) {
   }
 }
 
+async function addManualCalories(req, res, next) {
+  try {
+    const calories = Number(req.body.calories);
+    const { name } = req.body;
+    const date = getTodayDateString();
+
+    if (!Number.isFinite(calories) || calories <= 0) {
+      return res.status(400).json({ message: 'Calories must be greater than 0' });
+    }
+
+    const log = await getOrCreateLogForDate(req.user.id, date);
+
+    if (!log) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const productName = name?.trim() || 'קלוריות ידניות';
+
+    log.items.push({
+      productName,
+      calories,
+    });
+
+    log.totalCaloriesConsumed += calories;
+    await log.save();
+
+    res.status(201).json(log);
+  } catch (error) {
+    next(error);
+  }
+}
+
 async function removeFromBasket(req, res, next) {
   try {
     const { itemId } = req.params;
@@ -158,6 +196,7 @@ module.exports = {
   getLogByDate,
   getHistory,
   addToBasket,
+  addManualCalories,
   removeFromBasket,
   getTodayDateString,
   getOrCreateLogForDate,

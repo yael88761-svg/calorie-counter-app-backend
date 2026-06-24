@@ -5,6 +5,16 @@ import { catchError, map, of, switchMap } from 'rxjs';
 import { LogService } from '../../core/services/log.service';
 import { LogsActions } from './logs.actions';
 
+function getApiErrorMessage(error: unknown, fallback: string): string {
+  const body = (error as { error?: { message?: string; errors?: Array<{ message?: string }> } })?.error;
+
+  if (body?.errors?.length) {
+    return body.errors[0]?.message ?? body.message ?? fallback;
+  }
+
+  return body?.message ?? fallback;
+}
+
 @Injectable()
 export class LogsEffects {
   private readonly actions$ = inject(Actions);
@@ -19,7 +29,7 @@ export class LogsEffects {
           catchError((error) =>
             of(
               LogsActions.loadTodayFailure({
-                error: error?.error?.message ?? 'Failed to load today log',
+                error: getApiErrorMessage(error, 'Failed to load today log'),
               })
             )
           )
@@ -37,7 +47,25 @@ export class LogsEffects {
           catchError((error) =>
             of(
               LogsActions.addItemFailure({
-                error: error?.error?.message ?? 'Failed to add item',
+                error: getApiErrorMessage(error, 'Failed to add item'),
+              })
+            )
+          )
+        )
+      )
+    )
+  );
+
+  addManual$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(LogsActions.addManual),
+      switchMap(({ payload }) =>
+        this.logService.addManualCalories(payload).pipe(
+          map((log) => LogsActions.addItemSuccess({ log })),
+          catchError((error) =>
+            of(
+              LogsActions.addItemFailure({
+                error: getApiErrorMessage(error, 'Failed to add manual calories'),
               })
             )
           )
@@ -55,7 +83,7 @@ export class LogsEffects {
           catchError((error) =>
             of(
               LogsActions.removeItemFailure({
-                error: error?.error?.message ?? 'Failed to remove item',
+                error: getApiErrorMessage(error, 'Failed to remove item'),
               })
             )
           )

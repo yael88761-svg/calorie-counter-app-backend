@@ -14,9 +14,11 @@
             <div class="item-content">
               <div class="item-main">
                 <span class="item-name">{{ item.productName }}</span>
-                <span class="item-details">
-                  {{ item.quantity }} × {{ unitLabel(item.unit) }}
-                </span>
+                @if (item.unit) {
+                  <span class="item-details">
+                    {{ item.quantity }} × {{ unitLabel(item.unit) }}
+                  </span>
+                }
               </div>
               <div class="item-actions">
                 <span class="item-calories">{{ item.calories | calorieFormat }}</span>

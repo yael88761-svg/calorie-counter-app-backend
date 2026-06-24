@@ -14,6 +14,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { AuthService } from '../../core/services/auth.service';
 import { BasketComponent } from './basket/basket.component';
 import { ProgressBarComponent } from './progress-bar/progress-bar.component';
+import { QuickCaloriesComponent } from './quick-calories/quick-calories.component';
 import { CalorieFormatPipe } from '../../shared/pipes/calorie-format.pipe';
 import { CalorieWarningDirective } from '../../shared/directives/calorie-warning.directive';
 import { WeeklyChartComponent } from '../../shared/weekly-chart/weekly-chart.component';
@@ -36,6 +37,7 @@ import {
     MatProgressBarModule,
     BasketComponent,
     ProgressBarComponent,
+    QuickCaloriesComponent,
     CalorieFormatPipe,
     CalorieWarningDirective,
     WeeklyChartComponent,

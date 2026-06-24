@@ -1,6 +1,6 @@
 import { createActionGroup, emptyProps, props } from '@ngrx/store';
 
-import { AddToBasketPayload } from '../../core/services/log.service';
+import { AddManualPayload, AddToBasketPayload } from '../../core/services/log.service';
 import { DailyLog } from '../../core/models/api.models';
 
 export const LogsActions = createActionGroup({
@@ -13,6 +13,8 @@ export const LogsActions = createActionGroup({
     'Add Item': props<{ payload: AddToBasketPayload }>(),
     'Add Item Success': props<{ log: DailyLog }>(),
     'Add Item Failure': props<{ error: string }>(),
+
+    'Add Manual': props<{ payload: AddManualPayload }>(),
 
     'Remove Item': props<{ itemId: string }>(),
     'Remove Item Success': props<{ log: DailyLog }>(),

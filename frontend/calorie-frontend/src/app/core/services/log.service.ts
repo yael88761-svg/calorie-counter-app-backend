@@ -11,6 +11,11 @@ export interface AddToBasketPayload {
   quantity: number;
 }
 
+export interface AddManualPayload {
+  calories: number;
+  name?: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class LogService {
   private readonly http = inject(HttpClient);
@@ -29,6 +34,10 @@ export class LogService {
   }
 
   addToBasket(payload: AddToBasketPayload): Observable<DailyLog> {
+    return this.http.post<DailyLog>(`${this.baseUrl}/add`, payload);
+  }
+
+  addManualCalories(payload: AddManualPayload): Observable<DailyLog> {
     return this.http.post<DailyLog>(`${this.baseUrl}/add`, payload);
   }
 

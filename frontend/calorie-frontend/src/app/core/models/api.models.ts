@@ -32,10 +32,10 @@ export interface Product {
 
 export interface LogItem {
   _id: string;
-  productId: string;
+  productId?: string;
   productName: string;
-  unit: string;
-  quantity: number;
+  unit?: string;
+  quantity?: number;
   calories: number;
 }
 

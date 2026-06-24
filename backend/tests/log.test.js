@@ -245,6 +245,37 @@ describe('Logs API', () => {
       const response = await request(app)
         .post('/api/logs/add')
         .set(authHeader(token))
+        .send({});
+
+      expect(response.status).toBe(400);
+    });
+
+    it('adds manual calories without a product', async () => {
+      const user = await createUser({ email: 'add-manual@example.com' });
+      const token = signToken(user);
+
+      const response = await request(app)
+        .post('/api/logs/add')
+        .set(authHeader(token))
+        .send({
+          calories: 60,
+          name: 'אגוזי פקאן',
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.items).toHaveLength(1);
+      expect(response.body.items[0].productName).toBe('אגוזי פקאן');
+      expect(response.body.items[0].calories).toBe(60);
+      expect(response.body.totalCaloriesConsumed).toBe(60);
+    });
+
+    it('returns 400 for malformed product payload', async () => {
+      const user = await createUser({ email: 'add-malformed@example.com' });
+      const token = signToken(user);
+
+      const response = await request(app)
+        .post('/api/logs/add')
+        .set(authHeader(token))
         .send({
           productId: 'not-an-id',
           unit: '',

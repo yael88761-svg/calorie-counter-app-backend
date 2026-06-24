@@ -48,10 +48,10 @@ export class WeeklyChartComponent implements OnInit {
     }
   }
 
-  readonly hasChartData = signal(false);
-  readonly loading = signal(false);
+  hasChartData = signal(false);
+  loading = signal(false);
 
-  readonly chartData: ChartData<'bar'> = {
+  chartData: ChartData<'bar'> = {
     labels: [],
     datasets: [],
   };
@@ -146,7 +146,7 @@ export class WeeklyChartComponent implements OnInit {
 
     this.hasChartData.set(consumed.some((value) => value > 0));
 
-    Object.assign(this.chartData, {
+    this.chartData = {
       labels,
       datasets: [
         {
@@ -171,6 +171,6 @@ export class WeeklyChartComponent implements OnInit {
           pointBackgroundColor: 'rgba(90, 98, 90, 0.65)',
         },
       ],
-    });
+    } as ChartData<'bar'>;
   }
 }
