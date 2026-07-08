@@ -3,12 +3,20 @@ const { ChartJSNodeCanvas } = require('chartjs-node-canvas');
 const CHART_WIDTH = 800;
 const CHART_HEIGHT = 400;
 
-/** Single renderer instance — reuse for memory efficiency (see chartjs-node-canvas docs). */
-const chartCanvas = new ChartJSNodeCanvas({
-  width: CHART_WIDTH,
-  height: CHART_HEIGHT,
-  backgroundColour: 'white',
-});
+/** Lazy singleton — avoid loading native `canvas` at module import time (breaks Jest on Windows). */
+let chartCanvas;
+
+function getChartCanvas() {
+  if (!chartCanvas) {
+    chartCanvas = new ChartJSNodeCanvas({
+      width: CHART_WIDTH,
+      height: CHART_HEIGHT,
+      backgroundColour: 'white',
+    });
+  }
+
+  return chartCanvas;
+}
 
 /** Same UTC date key format as log.controller and weekly-chart.component. */
 function getUtcDateKey(daysAgo) {
@@ -135,7 +143,7 @@ async function generateWeeklyChart(weekLogs) {
     },
   };
 
-  return chartCanvas.renderToBuffer(configuration);
+  return getChartCanvas().renderToBuffer(configuration);
 }
 
 module.exports = {
